@@ -5,21 +5,21 @@ import { User } from 'lucide-react';
 const candidates = [
   {
     id: 1,
-    name: "John Smith",
-    party: "Progressive Party",
-    image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&h=400&q=80",
+    name: "Narendra Modi",
+    party: "BJP",
+    image: "https://imgs.search.brave.com/wTYTFN5IIqtLV4iqR9AVqGo1VCMDrMPribyR7VrfiOA/rs:fit:500:0:0:0/g:ce/aHR0cHM6Ly93YWxs/cGFwZXJjYXZlLmNv/bS93cC93cDY3Mjc4/NzEuanBn",
   },
   {
     id: 2,
-    name: "Sarah Johnson",
-    party: "Democratic Alliance",
-    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&h=400&q=80",
+    name: "Rahul Gandhi",
+    party: "Congress",
+    image: "https://media.gettyimages.com/id/2121047219/photo/indias-congress-party-leader-rahul-gandhi-addresses-supporters-during-a-rally-organised-by.jpg?s=612x612&w=0&k=20&c=WrSoSPo6rwgquOm7un4laJW924pO63k3jLE0DkIRpUU=",
   },
   {
     id: 3,
-    name: "Michael Brown",
-    party: "People's Front",
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&h=400&q=80",
+    name: "Donald Trump",
+    party: "Republican Party",
+    image: "https://media.gettyimages.com/id/2158175269/photo/racine-wisconsin-republican-presidential-candidate-former-president-donald-trump-arrives-for.jpg?s=612x612&w=0&k=20&c=R9L7PSzxDAuqPjwLKazxdS3URAeINSnONtcIlNZ_O2k=",
   }
 ];
 
