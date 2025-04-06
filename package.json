@@ -1,5 +1,5 @@
 {
-  "name": "evoting-system",
+  "name": "vite-react-typescript-starter",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,11 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "framer-motion": "^11.0.8",
+    "@supabase/supabase-js": "^2.39.8",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.22.2"
+    "react-router-dom": "^6.22.3",
+    "@tailwindcss/forms": "^0.5.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

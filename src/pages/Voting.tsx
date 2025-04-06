@@ -1,101 +1,167 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { User } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-const candidates = [
-  {
-    id: 1,
-    name: "Narendra Modi",
-    party: "BJP",
-    image: "https://imgs.search.brave.com/wTYTFN5IIqtLV4iqR9AVqGo1VCMDrMPribyR7VrfiOA/rs:fit:500:0:0:0/g:ce/aHR0cHM6Ly93YWxs/cGFwZXJjYXZlLmNv/bS93cC93cDY3Mjc4/NzEuanBn",
-  },
-  {
-    id: 2,
-    name: "Rahul Gandhi",
-    party: "Congress",
-    image: "https://media.gettyimages.com/id/2121047219/photo/indias-congress-party-leader-rahul-gandhi-addresses-supporters-during-a-rally-organised-by.jpg?s=612x612&w=0&k=20&c=WrSoSPo6rwgquOm7un4laJW924pO63k3jLE0DkIRpUU=",
-  },
-  {
-    id: 3,
-    name: "Donald Trump",
-    party: "Republican Party",
-    image: "https://media.gettyimages.com/id/2158175269/photo/racine-wisconsin-republican-presidential-candidate-former-president-donald-trump-arrives-for.jpg?s=612x612&w=0&k=20&c=R9L7PSzxDAuqPjwLKazxdS3URAeINSnONtcIlNZ_O2k=",
+interface Candidate {
+  id: string;
+  name: string;
+  party: string;
+  image_url: string;
+}
+
+export default function Voting() {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      fetchCandidates();
+      checkExistingVote();
+    }
+  }, [user]);
+
+  async function fetchCandidates() {
+    try {
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCandidates(data);
+    } catch (err) {
+      setError('Failed to fetch candidates');
+    } finally {
+      setLoading(false);
+    }
   }
-];
 
-const Voting = () => {
-  const [selectedCandidate, setSelectedCandidate] = React.useState<number | null>(null);
+  async function checkExistingVote() {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('votes')
+        .select('candidate_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setSelectedCandidate(data.candidate_id);
+        setHasVoted(true);
+      }
+    } catch (err) {
+      setError('Failed to check voting status');
+    }
+  }
+
+  const handleVote = async () => {
+    if (!selectedCandidate || !user) return;
+
+    try {
+      // First verify the user exists in the users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (userError) throw userError;
+      
+      if (!userData) {
+        setError('User profile not found. Please log out and sign in again.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('votes')
+        .insert([
+          {
+            user_id: user.id,
+            candidate_id: selectedCandidate,
+          },
+        ]);
+
+      if (error) throw error;
+      setHasVoted(true);
+      navigate('/results');
+    } catch (err) {
+      setError('Failed to submit vote');
+      console.error('Vote submission error:', err);
+    }
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
-      >
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          Cast Your Vote
-        </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-300">
-          Select your preferred candidate from the list below
-        </p>
-      </motion.div>
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 to-blue-100 py-16">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold text-center text-gray-900 mb-12">
+            Cast Your Vote
+          </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {candidates.map((candidate) => (
-          <motion.div
-            key={candidate.id}
-            whileHover={{ y: -5 }}
-            className={`
-              bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden cursor-pointer
-              ${selectedCandidate === candidate.id ? 'ring-2 ring-blue-500' : ''}
-            `}
-            onClick={() => setSelectedCandidate(candidate.id)}
-          >
-            <div className="aspect-w-1 aspect-h-1">
-              <img
-                src={candidate.image}
-                alt={candidate.name}
-                className="w-full h-48 object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = 'https://via.placeholder.com/400x400?text=Candidate';
-                }}
-              />
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+              {error}
             </div>
-            <div className="p-6">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                {candidate.name}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                {candidate.party}
-              </p>
-              <div className="flex items-center justify-center">
-                <User className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Candidate #{candidate.id}
-                </span>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            {candidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                className={`bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer transition transform hover:-translate-y-1 ${
+                  selectedCandidate === candidate.id ? 'ring-2 ring-blue-500' : ''
+                } ${hasVoted ? 'pointer-events-none opacity-75' : ''}`}
+                onClick={() => !hasVoted && setSelectedCandidate(candidate.id)}
+              >
+                <img
+                  src={candidate.image_url}
+                  alt={candidate.name}
+                  className="w-full h-48 object-cover"
+                />
+                <div className="p-4">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {candidate.name}
+                  </h3>
+                  <p className="text-gray-600">{candidate.party}</p>
+                  {selectedCandidate === candidate.id && (
+                    <div className="mt-2 flex items-center text-blue-600">
+                      <Check className="h-5 w-5 mr-1" />
+                      Selected
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            ))}
+          </div>
 
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        disabled={!selectedCandidate}
-        className={`
-          mt-12 mx-auto block px-8 py-3 rounded-lg text-white font-semibold
-          ${selectedCandidate
-            ? 'bg-blue-600 hover:bg-blue-700'
-            : 'bg-gray-400 cursor-not-allowed'
-          }
-        `}
-      >
-        Confirm Vote
-      </motion.button>
+          <div className="text-center">
+            <button
+              onClick={handleVote}
+              disabled={!selectedCandidate || hasVoted}
+              className={`px-8 py-3 rounded-lg text-white font-semibold ${
+                !selectedCandidate || hasVoted
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              } transition`}
+            >
+              {hasVoted ? 'Vote Submitted' : 'Submit Vote'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default Voting;
+}

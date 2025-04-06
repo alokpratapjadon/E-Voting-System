@@ -1,83 +1,121 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { BarChart, PieChart, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BarChart3 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-const Results = () => {
+interface CandidateResult {
+  id: string;
+  name: string;
+  party: string;
+  votes: number;
+  percentage: number;
+}
+
+export default function Results() {
+  const [results, setResults] = useState<CandidateResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchResults();
+    const interval = setInterval(fetchResults, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  async function fetchResults() {
+    try {
+      // Get all candidates
+      const { data: candidates, error: candidatesError } = await supabase
+        .from('candidates')
+        .select('id, name, party');
+
+      if (candidatesError) throw candidatesError;
+
+      // Get vote counts for each candidate
+      const { data: votes, error: votesError } = await supabase
+        .from('votes')
+        .select('candidate_id');
+
+      if (votesError) throw votesError;
+
+      // Calculate results
+      const totalVotes = votes.length;
+      const votesPerCandidate = votes.reduce((acc: { [key: string]: number }, vote) => {
+        acc[vote.candidate_id] = (acc[vote.candidate_id] || 0) + 1;
+        return acc;
+      }, {});
+
+      const processedResults = candidates.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        party: candidate.party,
+        votes: votesPerCandidate[candidate.id] || 0,
+        percentage: totalVotes
+          ? ((votesPerCandidate[candidate.id] || 0) / totalVotes) * 100
+          : 0,
+      }));
+
+      setResults(processedResults.sort((a, b) => b.votes - a.votes));
+    } catch (err) {
+      setError('Failed to fetch results');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
-      >
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          Election Results
-        </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-300">
-          Live voting statistics and results
-        </p>
-      </motion.div>
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 to-blue-100 py-16">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <BarChart3 className="h-12 w-12 mx-auto text-blue-600 mb-4" />
+            <h1 className="text-4xl font-bold text-gray-900">Election Results</h1>
+            <p className="text-gray-600 mt-2">Live voting statistics and results</p>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-        <motion.div
-          whileHover={{ y: -5 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"
-        >
-          <Users className="h-8 w-8 text-blue-600 mb-4" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">1,234</h3>
-          <p className="text-gray-600 dark:text-gray-300">Total Votes Cast</p>
-        </motion.div>
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
 
-        <motion.div
-          whileHover={{ y: -5 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"
-        >
-          <BarChart className="h-8 w-8 text-green-600 mb-4" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">78.5%</h3>
-          <p className="text-gray-600 dark:text-gray-300">Voter Turnout</p>
-        </motion.div>
-
-        <motion.div
-          whileHover={{ y: -5 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"
-        >
-          <PieChart className="h-8 w-8 text-purple-600 mb-4" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">3</h3>
-          <p className="text-gray-600 dark:text-gray-300">Leading Candidate</p>
-        </motion.div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            Vote Distribution
-          </h2>
-          <div className="space-y-4">
-            {[
-              { name: "John Smith", votes: 450, percentage: 45 },
-              { name: "Sarah Johnson", votes: 350, percentage: 35 },
-              { name: "Michael Brown", votes: 200, percentage: 20 }
-            ].map((candidate) => (
-              <div key={candidate.name}>
-                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-300 mb-1">
-                  <span>{candidate.name}</span>
-                  <span>{candidate.votes} votes ({candidate.percentage}%)</span>
+          <div className="bg-white rounded-lg shadow-xl p-6">
+            {results.map((result) => (
+              <div key={result.id} className="mb-6 last:mb-0">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {result.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">{result.party}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-gray-900">
+                      {result.votes} votes
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {result.percentage.toFixed(1)}%
+                    </p>
+                  </div>
                 </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${candidate.percentage}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full bg-blue-600"
-                  />
+                <div className="w-full bg-gray-200 rounded-full h-4">
+                  <div
+                    className="bg-blue-600 h-4 rounded-full transition-all duration-500"
+                    style={{ width: `${result.percentage}%` }}
+                  ></div>
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-8 text-center text-sm text-gray-600">
+            Last updated: {new Date().toLocaleString()}
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default Results;
+}
