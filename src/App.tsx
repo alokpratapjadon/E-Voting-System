@@ -1,58 +1,65 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Voting from './pages/Voting';
-import Results from './pages/Results';
-import Admin from './pages/Admin';
-import { useAuth } from './contexts/AuthContext';
-
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-
-  return <>{children}</>;
-}
+import { Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
+import Layout from './components/Layout';
+import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
+import VotingPage from './pages/VotingPage';
+import ResultsPage from './pages/ResultsPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminCandidates from './pages/AdminCandidates';
+import AdminSettings from './pages/AdminSettings';
+import NotFoundPage from './pages/NotFoundPage';
+import { useAuthStore } from './stores/authStore';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 
 function App() {
+  const { checkAuth } = useAuthStore();
+
+  useEffect(() => {
+    // Check if user is already logged in on app initialization
+    checkAuth();
+  }, [checkAuth]);
+
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/voting"
-              element={
-                <PrivateRoute>
-                  <Voting />
-                </PrivateRoute>
-              }
-            />
-            <Route path="/results" element={<Results />} />
-            <Route
-              path="/admin"
-              element={
-                <PrivateRoute>
-                  <Admin />
-                </PrivateRoute>
-              }
-            />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<HomePage />} />
+        <Route path="login" element={<LoginPage />} />
+        
+        {/* Protected voter routes */}
+        <Route path="voting" element={
+          <ProtectedRoute>
+            <VotingPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="results" element={<ResultsPage />} />
+        
+        {/* Admin routes */}
+        <Route path="admin/login" element={<AdminLoginPage />} />
+        <Route path="admin" element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        } />
+        <Route path="admin/candidates" element={
+          <AdminRoute>
+            <AdminCandidates />
+          </AdminRoute>
+        } />
+        <Route path="admin/settings" element={
+          <AdminRoute>
+            <AdminSettings />
+          </AdminRoute>
+        } />
+        
+        {/* 404 route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   );
 }
 
-export default App
+export default App;
