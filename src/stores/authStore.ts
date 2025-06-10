@@ -1,9 +1,12 @@
 import { create } from 'zustand';
+import { supabase } from '../lib/supabase';
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 
 interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   voterId: string;
   hasVoted?: boolean;
   isAdmin?: boolean;
@@ -15,33 +18,15 @@ interface AuthState {
   isLoading: boolean;
   user: User | null;
   login: (credentials: { email: string; password: string }) => Promise<boolean>;
+  signUp: (credentials: { email: string; password: string; name: string; voterId: string; phone: string }) => Promise<boolean>;
   adminLogin: (credentials: { email: string; password: string }) => Promise<boolean>;
   logout: () => void;
   checkAuth: () => void;
   setHasVoted: () => void;
+  verifyPhone: (phone: string, code: string) => Promise<boolean>;
+  requestPhoneVerification: (phone: string) => Promise<boolean>;
+  resetPassword: (email: string) => Promise<boolean>;
 }
-
-// Mock user data for demo purposes
-const MOCK_USERS = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'voter@example.com',
-    password: 'password123',
-    voterId: 'V12345',
-    hasVoted: false,
-    isAdmin: false,
-  },
-  {
-    id: '2',
-    name: 'Admin User',
-    email: 'admin@example.com',
-    password: 'admin123',
-    voterId: 'A00001',
-    hasVoted: false,
-    isAdmin: true,
-  },
-];
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
@@ -49,112 +34,233 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   user: null,
 
-  // Check if user is already logged in from localStorage
-  checkAuth: () => {
+  checkAuth: async () => {
     try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        set({ 
-          isAuthenticated: true, 
-          isAdmin: !!user.isAdmin,
-          user, 
-          isLoading: false 
-        });
-      } else {
-        set({ isLoading: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (userData) {
+          const { data: voteData } = await supabase
+            .from('votes')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .single();
+
+          const user = {
+            id: userData.id,
+            name: userData.name,
+            email: session.user.email!,
+            phone: userData.phone,
+            voterId: userData.voter_id,
+            hasVoted: !!voteData,
+            isAdmin: userData.is_admin
+          };
+
+          set({
+            isAuthenticated: true,
+            isAdmin: userData.is_admin,
+            user,
+            isLoading: false
+          });
+          return;
+        }
       }
+      set({ isLoading: false });
     } catch (error) {
-      console.error('Error checking authentication', error);
+      console.error('Error checking authentication:', error);
       set({ isLoading: false });
     }
   },
 
-  // Regular user login
+  signUp: async (credentials) => {
+    try {
+      if (!isValidPhoneNumber(credentials.phone)) throw new Error('Invalid phone number');
+      const phoneNumber = parsePhoneNumber(credentials.phone);
+      if (!phoneNumber) throw new Error('Invalid phone number format');
+
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .or(`voter_id.eq.${credentials.voterId},phone.eq.${phoneNumber.number}`);
+
+      if (existingUser && existingUser.length > 0) return false;
+
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: credentials.email,
+        password: credentials.password,
+        options: {
+          data: {
+            name: credentials.name,
+            voter_id: credentials.voterId,
+            phone: phoneNumber.number
+          }
+        }
+      });
+
+      if (signUpError || !user) return false;
+
+      const { data: userData, error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: user.id,
+          name: credentials.name,
+          voter_id: credentials.voterId,
+          phone: phoneNumber.number,
+          is_admin: false
+        })
+        .select()
+        .single();
+
+      if (profileError) return false;
+
+      const userProfile = {
+        id: userData.id,
+        name: userData.name,
+        email: user.email!,
+        phone: userData.phone,
+        voterId: userData.voter_id,
+        hasVoted: false,
+        isAdmin: false
+      };
+
+      set({
+        isAuthenticated: true,
+        isAdmin: false,
+        user: userProfile
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Signup error:', error);
+      return false;
+    }
+  },
+
   login: async (credentials) => {
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Find user with matching credentials
-      const user = MOCK_USERS.find(
-        u => u.email === credentials.email && 
-             u.password === credentials.password &&
-             !u.isAdmin
-      );
-      
-      if (user) {
-        // Remove password before storing user data
-        const { password, ...userWithoutPassword } = user;
-        
-        // Save to localStorage and update state
-        localStorage.setItem('user', JSON.stringify(userWithoutPassword));
-        set({ 
-          isAuthenticated: true, 
+      const { data: { user }, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error || !user) return false;
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (userData && !userData.is_admin) {
+        const { data: voteData } = await supabase
+          .from('votes')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        const userProfile = {
+          id: userData.id,
+          name: userData.name,
+          email: user.email!,
+          phone: userData.phone,
+          voterId: userData.voter_id,
+          hasVoted: !!voteData,
+          isAdmin: false
+        };
+
+        set({
+          isAuthenticated: true,
           isAdmin: false,
-          user: userWithoutPassword 
+          user: userProfile
         });
         return true;
       }
-      
+
       return false;
     } catch (error) {
-      console.error('Login error', error);
+      console.error('Login error:', error);
       return false;
     }
   },
 
-  // Admin login
   adminLogin: async (credentials) => {
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Find admin user with matching credentials
-      const admin = MOCK_USERS.find(
-        u => u.email === credentials.email && 
-             u.password === credentials.password &&
-             u.isAdmin
-      );
-      
-      if (admin) {
-        // Remove password before storing user data
-        const { password, ...adminWithoutPassword } = admin;
-        
-        // Save to localStorage and update state
-        localStorage.setItem('user', JSON.stringify(adminWithoutPassword));
-        set({ 
-          isAuthenticated: true, 
+      const { data: { user }, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error || !user) return false;
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (userData && userData.is_admin) {
+        const adminProfile = {
+          id: userData.id,
+          name: userData.name,
+          email: user.email!,
+          phone: userData.phone,
+          voterId: userData.voter_id,
+          isAdmin: true
+        };
+
+        set({
+          isAuthenticated: true,
           isAdmin: true,
-          user: adminWithoutPassword 
+          user: adminProfile
         });
+
         return true;
       }
-      
+
       return false;
     } catch (error) {
-      console.error('Admin login error', error);
+      console.error('Admin login error:', error);
       return false;
     }
   },
 
-  // Logout
-  logout: () => {
-    localStorage.removeItem('user');
-    set({ 
-      isAuthenticated: false, 
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({
+      isAuthenticated: false,
       isAdmin: false,
-      user: null 
+      user: null
     });
   },
 
-  // Update user's voting status
   setHasVoted: () => {
-    const { user } = get();
+    const user = get().user;
     if (user) {
-      const updatedUser = { ...user, hasVoted: true };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      set({ user: updatedUser });
+      set({ user: { ...user, hasVoted: true } });
+    }
+  },
+
+  verifyPhone: async (phone, code) => {
+    // Mock implementation
+    return true;
+  },
+
+  requestPhoneVerification: async (phone) => {
+    // Mock implementation
+    return true;
+  },
+
+  resetPassword: async (email) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      return !error;
+    } catch {
+      return false;
     }
   },
 }));

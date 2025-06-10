@@ -1,10 +1,17 @@
-import { useState } from 'react';
+// pages/AdminLoginPage.tsx
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Shield, Info } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter
+} from '../components/ui/Card';
 import { useAuthStore } from '../stores/authStore';
 
 const AdminLoginPage = () => {
@@ -15,33 +22,36 @@ const AdminLoginPage = () => {
   const navigate = useNavigate();
   const { adminLogin } = useAuthStore();
 
+  // Optional: Auto-fill demo credentials (for dev only)
+  useEffect(() => {
+    setEmail('admin@example.com');
+    setPassword('admin123');
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    try {
-      // Validate inputs
-      if (!email || !password) {
-        setError('Please fill in all fields');
-        setIsLoading(false);
-        return;
-      }
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
 
-      // Attempt admin login
+    try {
       const success = await adminLogin({ email, password });
-      
+
       if (success) {
         navigate('/admin');
       } else {
         setError('Invalid admin credentials');
       }
-    } catch (err) {
-      setError('An error occurred while logging in');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -86,15 +96,15 @@ const AdminLoginPage = () => {
                 />
 
                 {error && (
-                  <div className="p-3 bg-error-50 text-error-700 rounded-md text-sm flex items-start">
+                  <div className="p-3 bg-red-100 text-red-800 rounded-md text-sm flex items-start">
                     <Info className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                     <span>{error}</span>
                   </div>
                 )}
 
-                <Button 
-                  type="submit" 
-                  variant="primary" 
+                <Button
+                  type="submit"
+                  variant="primary"
                   isLoading={isLoading}
                   fullWidth
                 >
@@ -105,10 +115,12 @@ const AdminLoginPage = () => {
               <div className="mt-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-neutral-300"></div>
+                    <div className="w-full border-t border-neutral-300" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-neutral-500">Demo Credentials</span>
+                    <span className="px-2 bg-white text-neutral-500">
+                      Demo Credentials
+                    </span>
                   </div>
                 </div>
                 <div className="mt-4 text-center text-sm text-neutral-600">
@@ -118,10 +130,16 @@ const AdminLoginPage = () => {
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Link to="/" className="text-sm text-neutral-600 hover:text-primary-600">
+              <Link
+                to="/"
+                className="text-sm text-neutral-600 hover:text-primary-600"
+              >
                 Back to Home
               </Link>
-              <Link to="/login" className="text-sm text-neutral-600 hover:text-primary-600">
+              <Link
+                to="/login"
+                className="text-sm text-neutral-600 hover:text-primary-600"
+              >
                 Voter Login
               </Link>
             </CardFooter>

@@ -11,16 +11,22 @@ import AdminCandidates from './pages/AdminCandidates';
 import AdminSettings from './pages/AdminSettings';
 import NotFoundPage from './pages/NotFoundPage';
 import { useAuthStore } from './stores/authStore';
+import { useElectionStore } from './stores/electionStore';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 
 function App() {
   const { checkAuth } = useAuthStore();
+  const { fetchCandidates, fetchSettings } = useElectionStore();
 
   useEffect(() => {
     // Check if user is already logged in on app initialization
     checkAuth();
-  }, [checkAuth]);
+    
+    // Fetch initial data
+    fetchCandidates();
+    fetchSettings();
+  }, [checkAuth, fetchCandidates, fetchSettings]);
 
   return (
     <Routes>
