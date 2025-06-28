@@ -83,12 +83,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const phoneNumber = parsePhoneNumber(credentials.phone);
       if (!phoneNumber) throw new Error('Invalid phone number format');
 
-      const { data: existingUser } = await supabase
+      // Check for existing user by voterId
+      const { data: existingVoterId } = await supabase
         .from('users')
         .select('id')
-        .or(`voter_id.eq.${credentials.voterId},phone.eq.${phoneNumber.number}`);
+        .eq('voter_id', credentials.voterId)
+        .single();
 
-      if (existingUser && existingUser.length > 0) return false;
+      if (existingVoterId) return false;
+
+      // Check for existing user by phone
+      const { data: existingPhone } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', phoneNumber.number)
+        .single();
+
+      if (existingPhone) return false;
+
+      // Check for existing user by email
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', credentials.email)
+        .single();
+
+      if (existingEmail) return false;
 
       const { data: { user }, error: signUpError } = await supabase.auth.signUp({
         email: credentials.email,
@@ -102,7 +122,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       });
 
-      if (signUpError || !user) return false;
+      if (signUpError || !user) {
+        console.error('Supabase signUp error:', signUpError);
+        return false;
+      }
 
       const { data: userData, error: profileError } = await supabase
         .from('users')
@@ -111,12 +134,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name: credentials.name,
           voter_id: credentials.voterId,
           phone: phoneNumber.number,
+          email: credentials.email,
           is_admin: false
         })
         .select()
         .single();
 
-      if (profileError) return false;
+      if (profileError) {
+        console.error('Profile insert error:', profileError);
+        return false;
+      }
 
       const userProfile = {
         id: userData.id,
@@ -246,13 +273,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   verifyPhone: async (phone, code) => {
-    // Mock implementation
-    return true;
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone,
+        token: code,
+        type: 'sms'
+      });
+      if (error) {
+        console.error('Phone verification error:', error);
+        return false;
+      }
+      // After verification, fetch user session and update state
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (userData) {
+          const userProfile = {
+            id: userData.id,
+            name: userData.name,
+            email: session.user.email!,
+            phone: userData.phone,
+            voterId: userData.voter_id,
+            hasVoted: false,
+            isAdmin: userData.is_admin
+          };
+
+          set({
+            isAuthenticated: true,
+            isAdmin: userData.is_admin,
+            user: userProfile
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Verify phone error:', error);
+      return false;
+    }
   },
 
   requestPhoneVerification: async (phone) => {
-    // Mock implementation
-    return true;
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone,
+      });
+      if (error) {
+        console.error('Request phone verification error:', error);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Request phone verification exception:', error);
+      return false;
+    }
   },
 
   resetPassword: async (email) => {

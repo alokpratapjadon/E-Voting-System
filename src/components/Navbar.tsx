@@ -43,7 +43,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center">
           {/* Logo and site name */}
           <Link to="/" className="flex items-center gap-2">
-            <Vote className="h-8 w-8 text-primary-600" />
+            <img src="/vote-icon.png" alt="SecureVote Logo" className="h-8 w-8" />
             <span className="text-xl font-bold text-neutral-900">SecureVote</span>
           </Link>
 
