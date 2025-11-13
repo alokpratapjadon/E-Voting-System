@@ -55,6 +55,7 @@ const retry = async <T>(
   }
 };
 
+
 export const useElectionStore = create<ElectionState>((set, get) => ({
   candidates: [],
   settings: DEFAULT_SETTINGS,
